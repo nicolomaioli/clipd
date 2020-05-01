@@ -16,7 +16,7 @@ import (
 // Clip represents a message in a register
 type Clip struct {
 	Reg     string `json:"reg,omitempty"`
-	Content string `json:"clip"`
+	Content string `json:"content"`
 }
 
 // Mem holds clipd's memory
@@ -62,15 +62,15 @@ func paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		reg = DefaultRegister
 	}
 
-	var clip string
+	var content string
 
 	MemMut.RLock()
 	if v, ok := Mem[reg]; ok {
-		clip = v
+		content = v
 	}
 	MemMut.RUnlock()
 
-	if clip == "" {
+	if content == "" {
 		DebugLogger.Printf("clip not found with reg %q", reg)
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -78,7 +78,7 @@ func paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	yr := &Clip{
 		Reg:     reg,
-		Content: clip,
+		Content: content,
 	}
 
 	b, err := json.Marshal(yr)
@@ -88,15 +88,16 @@ func paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		return
 	}
 
+	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
 }
 
 func main() {
 	router := httprouter.New()
-	router.POST("/yank", yank)
-	router.GET("/paste/:reg", paste)
-	router.GET("/paste", paste)
+	router.POST("/clipd", yank)
+	router.GET("/clipd", paste)
+	router.GET("/clipd/:reg", paste)
 
 	addr := ":8080"
 	l := log.New(os.Stdout, "INFO ", log.Ldate|log.Ltime)
