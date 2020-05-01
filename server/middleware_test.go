@@ -1,14 +1,15 @@
-package middleware
+package server
 
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nicolomaioli/clipd/internal/testutils"
+	"github.com/rs/zerolog"
+
+	"github.com/nicolomaioli/clipd/server/internal/testutils"
 )
 
 func TestRequestLogger_ServeHTTP(t *testing.T) {
@@ -21,6 +22,7 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 
 	// An inspectable bytes.Buffer Logger can write to
 	outBuf := new(bytes.Buffer)
+	lr := zerolog.New(outBuf)
 
 	tests := []struct {
 		name string
@@ -31,7 +33,7 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 			name: "It logs the incoming request and calls Next",
 			rl: RequestLogger{
 				Next:   testutils.SpyHandler{},
-				Logger: log.New(outBuf, "", 0),
+				Logger: &lr,
 			},
 			args: args{
 				w: httptest.NewRecorder(),
@@ -43,7 +45,7 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.rl.ServeHTTP(tt.args.w, tt.args.r)
-			want := fmt.Sprintf("%s %s\n", tt.args.r.Method, tt.args.r.URL.Path)
+			want := fmt.Sprintf("{\"level\":\"info\",\"method\":\"%s\",\"url\":\"%s\"}\n", tt.args.r.Method, tt.args.r.URL.Path)
 			got := outBuf.String()
 
 			if got != want {
