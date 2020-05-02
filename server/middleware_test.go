@@ -13,8 +13,6 @@ import (
 )
 
 func TestRequestLogger_ServeHTTP(t *testing.T) {
-	t.Parallel()
-
 	type args struct {
 		w *httptest.ResponseRecorder
 		r *http.Request
@@ -44,6 +42,8 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer outBuf.Reset()
+
 			tt.rl.ServeHTTP(tt.args.w, tt.args.r)
 			want := fmt.Sprintf("{\"level\":\"info\",\"method\":\"%s\",\"url\":\"%s\"}\n", tt.args.r.Method, tt.args.r.URL.Path)
 			got := outBuf.String()
@@ -55,9 +55,6 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 			if tt.args.w.Body.String() != "called" {
 				t.Fatal("handler Next was not called")
 			}
-
-			// Reset buffer for next test
-			outBuf.Reset()
 		})
 	}
 }

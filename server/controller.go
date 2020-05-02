@@ -11,13 +11,19 @@ import (
 func yank(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		logger.Error().Msg("error reading body")
+		logger.Error().Msgf("error reading body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	yr := &Clip{}
-	json.Unmarshal(body, yr)
+	err = json.Unmarshal(body, yr)
+	if err != nil {
+		logger.Error().Msgf("invalid json: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	if yr.Reg == "" {
 		yr.Reg = defaultRegister
 	}
