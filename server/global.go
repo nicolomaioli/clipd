@@ -1,8 +1,9 @@
 package server
 
 import (
-	"sync"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
@@ -11,11 +12,8 @@ import (
 // Global logger
 var logger *zerolog.Logger
 
-// mem holds clipd's memory
-var mem = map[string]string{}
-
-// Lock and Unlock mem
-var memMut = &sync.RWMutex{}
+// memc holds clipd's memory
+var memc = cache.New(24*time.Hour, 10*24*time.Hour)
 
 // Default register name
 const defaultRegister = "default"

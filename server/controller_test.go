@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
@@ -46,13 +48,14 @@ func TestYank(t *testing.T) {
 		},
 	}
 
+	memc = cache.New(1*time.Hour, 1*time.Hour)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer outBuf.Reset()
-
-			memMut.Lock()
-			mem = make(map[string]string)
-			memMut.Unlock()
+			defer func() {
+				defer outBuf.Reset()
+				defer memc.Flush()
+			}()
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("POST", "/clipd", bytes.NewReader([]byte(tt.body)))
@@ -72,11 +75,9 @@ func TestYank(t *testing.T) {
 
 			var content string
 
-			memMut.RLock()
-			if v, ok := mem[clip.Reg]; ok {
-				content = v
+			if v, ok := memc.Get(clip.Reg); ok {
+				content = v.(string)
 			}
-			memMut.RUnlock()
 
 			if clip.Content != content {
 				t.Fatalf("expected content %q, got %q", clip.Content, content)
@@ -118,20 +119,22 @@ func TestPaste(t *testing.T) {
 		},
 	}
 
+	memc = cache.New(1*time.Hour, 1*time.Hour)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer outBuf.Reset()
+			defer func() {
+				defer outBuf.Reset()
+				defer memc.Flush()
+			}()
 
-			memMut.Lock()
-			mem = make(map[string]string)
 			if tt.insertInMemory {
 				if tt.expectedReg == "" {
 					tt.expectedReg = defaultRegister
 				}
 
-				mem[tt.expectedReg] = tt.expectedContent
+				memc.Set(tt.expectedReg, tt.expectedContent, 0)
 			}
-			memMut.Unlock()
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("GET", fmt.Sprintf("/clipd/%s", tt.expectedReg), nil)
