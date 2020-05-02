@@ -28,9 +28,7 @@ func yank(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		yr.Reg = defaultRegister
 	}
 
-	memMut.Lock()
-	mem[yr.Reg] = yr.Content
-	memMut.Unlock()
+	memc.Set(yr.Reg, yr.Content, 0)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -42,11 +40,9 @@ func paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	var content string
 
-	memMut.RLock()
-	if v, ok := mem[reg]; ok {
-		content = v
+	if v, ok := memc.Get(reg); ok {
+		content = v.(string)
 	}
-	memMut.RUnlock()
 
 	if content == "" {
 		logger.Debug().Msgf("clip not found with reg %q", reg)
