@@ -40,15 +40,15 @@ type Config struct {
 	LogLevel zerolog.Level
 }
 
-// Server holds the clipd server
-type Server struct {
-	Config Config
+// ClipdServer holds the clipd server
+type ClipdServer struct {
 	Logger *zerolog.Logger
-	router http.Handler
+	Cache  *cache.Cache
+	Server *http.Server
 }
 
-// NewServer creates a new Server from Config, and initializes the global logger
-func NewServer(config Config) *Server {
+// NewClipdServer creates a new Server from Config, and initializes the global logger
+func NewClipdServer(config Config) *ClipdServer {
 	// Setup logger
 	lr := NewLogger(config.Develop, config.LogLevel)
 	cache := cache.New(24*time.Hour, 10*24*time.Hour)
@@ -65,15 +65,28 @@ func NewServer(config Config) *Server {
 		Logger: lr,
 	}
 
-	return &Server{
-		Config: config,
+	return &ClipdServer{
 		Logger: lr,
-		router: requestLogger,
+		Cache:  cache,
+		Server: &http.Server{
+			Addr:         config.Addr,
+			Handler:      requestLogger,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		},
 	}
 }
 
+// CleanAfterShutdown can be called after http.Server.Shutdown
+func (c *ClipdServer) CleanAfterShutdown() {
+	c.Logger.Info().Msg("ClipdServer clean")
+	c.Cache.Flush()
+	c.Logger.Info().Msg("server shutdown complete")
+}
+
 // ListenAndServe starts the clipd server on the configured address
-func (s *Server) ListenAndServe() error {
-	s.Logger.Info().Msgf("server listening at %s", s.Config.Addr)
-	return http.ListenAndServe(s.Config.Addr, s.router)
+func (c *ClipdServer) ListenAndServe() error {
+	c.Logger.Info().Str("addr", c.Server.Addr).Msg("server listening")
+	return c.Server.ListenAndServe()
 }
