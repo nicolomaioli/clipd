@@ -4,12 +4,18 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
-func newLogger(develop bool, level zerolog.Level) *zerolog.Logger {
+// DefaultRegister holds the name of the default register
+const DefaultRegister = "default"
+
+// NewLogger instantiates a new global logger
+func NewLogger(develop bool, level zerolog.Level) *zerolog.Logger {
 	var output io.Writer
 
 	if develop {
@@ -44,14 +50,15 @@ type Server struct {
 // NewServer creates a new Server from Config, and initializes the global logger
 func NewServer(config Config) *Server {
 	// Setup logger
-	lr := newLogger(config.Develop, config.LogLevel)
-	logger = lr
+	lr := NewLogger(config.Develop, config.LogLevel)
+	cache := cache.New(24*time.Hour, 10*24*time.Hour)
 
 	// Create router
 	router := httprouter.New()
-	router.POST("/clipd", yank)
-	router.GET("/clipd", paste)
-	router.GET("/clipd/:reg", paste)
+	controller := NewClipdController(lr, cache)
+	router.POST("/clipd", controller.Yank)
+	router.GET("/clipd", controller.Paste)
+	router.GET("/clipd/:reg", controller.Paste)
 
 	requestLogger := RequestLogger{
 		Next:   router,

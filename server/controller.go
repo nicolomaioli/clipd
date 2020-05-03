@@ -6,12 +6,29 @@ import (
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/patrickmn/go-cache"
+	"github.com/rs/zerolog"
 )
 
-func yank(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// ClipdController contains the handler for the "/clipd" routes
+type ClipdController struct {
+	logger *zerolog.Logger
+	cache  *cache.Cache
+}
+
+// NewClipdController instantiates a new clipdController
+func NewClipdController(l *zerolog.Logger, c *cache.Cache) *ClipdController {
+	return &ClipdController{
+		logger: l,
+		cache:  c,
+	}
+}
+
+// Yank POST /clipd
+func (c *ClipdController) Yank(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		logger.Error().Msgf("error reading body: %s", err)
+		c.logger.Error().Msgf("error reading body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -19,33 +36,34 @@ func yank(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	yr := &Clip{}
 	err = json.Unmarshal(body, yr)
 	if err != nil {
-		logger.Error().Msgf("invalid json: %s", err)
+		c.logger.Error().Msgf("invalid json: %s", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if yr.Reg == "" {
-		yr.Reg = defaultRegister
+		yr.Reg = DefaultRegister
 	}
 
-	memc.Set(yr.Reg, yr.Content, 0)
+	c.cache.Set(yr.Reg, yr.Content, 0)
 	w.WriteHeader(http.StatusOK)
 }
 
-func paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+// Paste GET /clipd
+func (c *ClipdController) Paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	reg := p.ByName("reg")
 	if reg == "" {
-		reg = defaultRegister
+		reg = DefaultRegister
 	}
 
 	var content string
 
-	if v, ok := memc.Get(reg); ok {
+	if v, ok := c.cache.Get(reg); ok {
 		content = v.(string)
 	}
 
 	if content == "" {
-		logger.Debug().Msgf("clip not found with reg %q", reg)
+		c.logger.Debug().Msgf("clip not found with reg %q", reg)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -57,7 +75,7 @@ func paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	b, err := json.Marshal(yr)
 	if err != nil {
-		logger.Error().Msgf("error marshaling request %v: %s", yr, err)
+		c.logger.Error().Msgf("error marshaling request %v: %s", yr, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
