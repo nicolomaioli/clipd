@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -15,15 +14,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var outBuf = new(bytes.Buffer)
-
-func TestMain(m *testing.M) {
-	lr := zerolog.New(outBuf)
-	logger = &lr
-
-	exit := m.Run()
-	os.Exit(exit)
-}
+var (
+	outBuf     = new(bytes.Buffer)
+	l          = zerolog.New(outBuf)
+	c          = cache.New(1*time.Hour, 1*time.Hour)
+	controller = NewClipdController(&l, c)
+)
 
 func TestYank(t *testing.T) {
 	tests := []struct {
@@ -48,20 +44,18 @@ func TestYank(t *testing.T) {
 		},
 	}
 
-	memc = cache.New(1*time.Hour, 1*time.Hour)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer func() {
 				defer outBuf.Reset()
-				defer memc.Flush()
+				defer controller.cache.Flush()
 			}()
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("POST", "/clipd", bytes.NewReader([]byte(tt.body)))
 			var p []httprouter.Param
 
-			yank(w, r, p)
+			controller.Yank(w, r, p)
 			if w.Code != tt.expectedStatus {
 				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
@@ -70,12 +64,12 @@ func TestYank(t *testing.T) {
 			_ = json.Unmarshal([]byte(tt.body), &clip)
 
 			if clip.Reg == "" {
-				clip.Reg = defaultRegister
+				clip.Reg = DefaultRegister
 			}
 
 			var content string
 
-			if v, ok := memc.Get(clip.Reg); ok {
+			if v, ok := controller.cache.Get(clip.Reg); ok {
 				content = v.(string)
 			}
 
@@ -119,28 +113,26 @@ func TestPaste(t *testing.T) {
 		},
 	}
 
-	memc = cache.New(1*time.Hour, 1*time.Hour)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer func() {
 				defer outBuf.Reset()
-				defer memc.Flush()
+				defer controller.cache.Flush()
 			}()
 
 			if tt.insertInMemory {
 				if tt.expectedReg == "" {
-					tt.expectedReg = defaultRegister
+					tt.expectedReg = DefaultRegister
 				}
 
-				memc.Set(tt.expectedReg, tt.expectedContent, 0)
+				controller.cache.Set(tt.expectedReg, tt.expectedContent, 0)
 			}
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("GET", fmt.Sprintf("/clipd/%s", tt.expectedReg), nil)
 			p := []httprouter.Param{{Key: "reg", Value: tt.expectedReg}}
 
-			paste(w, r, p)
+			controller.Paste(w, r, p)
 			if w.Code != tt.expectedStatus {
 				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
