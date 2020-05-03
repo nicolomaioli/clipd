@@ -2,20 +2,19 @@ package server
 
 import (
 	"bytes"
-	"fmt"
-	"net/http"
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rs/zerolog"
-
 	"github.com/nicolomaioli/clipd/server/internal/testutils"
+	"github.com/rs/zerolog"
 )
 
 func TestRequestLogger_ServeHTTP(t *testing.T) {
 	type args struct {
-		w *httptest.ResponseRecorder
-		r *http.Request
+		status int
+		method string
+		path   string
 	}
 
 	// An inspectable bytes.Buffer Logger can write to
@@ -24,18 +23,22 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 
 	tests := []struct {
 		name string
-		rl   RequestLogger
 		args args
 	}{
 		{
-			name: "It logs the incoming request and calls Next",
-			rl: RequestLogger{
-				Next:   testutils.SpyHandler{},
-				Logger: &lr,
-			},
+			name: "It calls Next and logs the correct status 201",
 			args: args{
-				w: httptest.NewRecorder(),
-				r: httptest.NewRequest("GET", "/copy/reg", nil),
+				status: 201,
+				method: "POST",
+				path:   "/test/route",
+			},
+		},
+		{
+			name: "It calls Next and logs the correct status 404",
+			args: args{
+				status: 404,
+				method: "GET",
+				path:   "/test/route",
 			},
 		},
 	}
@@ -44,16 +47,37 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer outBuf.Reset()
 
-			tt.rl.ServeHTTP(tt.args.w, tt.args.r)
-			want := fmt.Sprintf("{\"level\":\"info\",\"method\":\"%s\",\"url\":\"%s\"}\n", tt.args.r.Method, tt.args.r.URL.Path)
-			got := outBuf.String()
-
-			if got != want {
-				t.Fatalf("expected %q, got %q", want, got)
+			spy := testutils.SpyHandler{Status: tt.args.status}
+			rl := RequestLogger{
+				Next:   spy,
+				Logger: &lr,
 			}
 
-			if tt.args.w.Body.String() != "called" {
-				t.Fatal("handler Next was not called")
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(tt.args.method, tt.args.path, nil)
+
+			rl.ServeHTTP(w, r)
+
+			tle := LogEntry{}
+			err := json.Unmarshal(outBuf.Bytes(), &tle)
+			if err != nil {
+				t.Fatalf("could not unmarshal %q: %s", outBuf.String(), err)
+			}
+
+			if tt.args.status != tle.Status {
+				t.Errorf("expected logged status %d, got %d", tt.args.status, tle.Status)
+			}
+
+			if tt.args.method != tle.Method {
+				t.Errorf("expected logged method %q, got %q", tt.args.method, tle.Method)
+			}
+
+			if tt.args.path != tle.Path {
+				t.Errorf("expected logged path %q, got %q", tt.args.path, tle.Path)
+			}
+
+			if w.Body.String() != "called" {
+				t.Errorf("handler Next was not called")
 			}
 		})
 	}
