@@ -48,7 +48,7 @@ type ClipdServer struct {
 }
 
 // NewClipdServer creates a new Server from Config, and initializes the global logger
-func NewClipdServer(config Config) *ClipdServer {
+func NewClipdServer(config *Config) *ClipdServer {
 	// Setup logger
 	lr := NewLogger(config.Develop, config.LogLevel)
 	cache := cache.New(24*time.Hour, 10*24*time.Hour)
