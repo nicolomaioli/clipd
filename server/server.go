@@ -57,6 +57,7 @@ func NewClipdServer(config *Config) *ClipdServer {
 	router := httprouter.New()
 	controller := NewClipdController(lr, cache)
 	router.POST("/clipd", controller.Yank)
+	router.POST("/clipd/:reg", controller.Yank)
 	router.GET("/clipd", controller.Paste)
 	router.GET("/clipd/:reg", controller.Paste)
 
