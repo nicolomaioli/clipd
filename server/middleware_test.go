@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/nicolomaioli/clipd/server/internal/testutils"
@@ -79,6 +81,68 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 			if w.Body.String() != "called" {
 				t.Errorf("handler Next was not called")
 			}
+		})
+	}
+}
+
+func TestResponseStats_Header(t *testing.T) {
+	tests := []struct {
+		name string
+		r    *ResponseStats
+		want http.Header
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.r.Header(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ResponseStats.Header() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResponseStats_Write(t *testing.T) {
+	type args struct {
+		b []byte
+	}
+	tests := []struct {
+		name    string
+		r       *ResponseStats
+		args    args
+		want    int
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.r.Write(tt.args.b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ResponseStats.Write() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ResponseStats.Write() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResponseStats_WriteHeader(t *testing.T) {
+	type args struct {
+		statusCode int
+	}
+	tests := []struct {
+		name string
+		r    *ResponseStats
+		args args
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.r.WriteHeader(tt.args.statusCode)
 		})
 	}
 }

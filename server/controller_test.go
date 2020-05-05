@@ -2,10 +2,10 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
+	"errors"
+	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,138 +14,240 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var (
-	outBuf     = new(bytes.Buffer)
-	l          = zerolog.New(outBuf)
-	c          = cache.New(1*time.Hour, 1*time.Hour)
-	controller = NewClipdController(&l, c)
-)
+type badReader int
 
-func TestYank(t *testing.T) {
+func (badReader) Read([]byte) (int, error) {
+	return 0, errors.New("test error")
+}
+
+func TestNewClipdController(t *testing.T) {
+	testOutBuf := new(bytes.Buffer)
+	lr := zerolog.New(testOutBuf)
+	cc := cache.New(1*time.Millisecond, 1*time.Millisecond)
+
+	type args struct {
+		l *zerolog.Logger
+		c *cache.Cache
+	}
 	tests := []struct {
-		name           string
-		body           string
-		expectedStatus int
+		name string
+		args args
+		want *ClipdController
 	}{
 		{
-			name:           "It updates the default register",
-			body:           "{\"content\":\"test\"}",
-			expectedStatus: 200,
-		},
-		{
-			name:           "It updates the given register",
-			body:           "{\"reg\":\"abc\",\"content\":\"test\"}",
-			expectedStatus: 200,
-		},
-		{
-			name:           "It returns 400 if the body contains invalid json",
-			body:           "invalid json",
-			expectedStatus: 400,
+			name: "It instantiates correctly",
+			args: args{
+				l: &lr,
+				c: cc,
+			},
+			want: &ClipdController{
+				logger: &lr,
+				cache:  cc,
+			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				defer outBuf.Reset()
-				defer controller.cache.Flush()
-			}()
-
-			w := httptest.NewRecorder()
-			r := httptest.NewRequest("POST", "/clipd", bytes.NewReader([]byte(tt.body)))
-			var p []httprouter.Param
-
-			controller.Yank(w, r, p)
-			if w.Code != tt.expectedStatus {
-				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
-			}
-
-			var clip Clip
-			_ = json.Unmarshal([]byte(tt.body), &clip)
-
-			if clip.Reg == "" {
-				clip.Reg = DefaultRegister
-			}
-
-			var content string
-
-			if v, ok := controller.cache.Get(clip.Reg); ok {
-				content = v.(string)
-			}
-
-			if clip.Content != content {
-				t.Fatalf("expected content %q, got %q", clip.Content, content)
+			if got := NewClipdController(tt.args.l, tt.args.c); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewClipdController() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestPaste(t *testing.T) {
-	tests := []struct {
-		name            string
-		insertInMemory  bool
-		expectedReg     string
-		expectedContent string
-		expectedStatus  int
-	}{
-		{
-			name:            "It copies from the default register",
-			insertInMemory:  true,
-			expectedContent: "test",
-			expectedStatus:  200,
-		},
-		{
-			name:            "It copies from a given register",
-			insertInMemory:  true,
-			expectedReg:     "abc",
-			expectedContent: "test",
-			expectedStatus:  200,
-		},
-		{
-			name:           "It returns 404 if the register is empty",
-			expectedStatus: 404,
-		},
-		{
-			name:            "It escapes malformed json correctly",
-			insertInMemory:  true,
-			expectedContent: "\"test\"},{\"another key\":\"another value\"}",
-			expectedStatus:  200,
-		},
+func TestClipdController_Yank(t *testing.T) {
+	testOutBuf := new(bytes.Buffer)
+	lr := zerolog.New(testOutBuf)
+	cc := cache.New(1*time.Minute, 10*time.Minute)
+	controller := NewClipdController(&lr, cc)
+
+	type args struct {
+		w *httptest.ResponseRecorder
+		r *http.Request
+		p httprouter.Params
 	}
 
+	type wants struct {
+		statusCode int
+		readCache  bool
+		register   string
+		content    []byte
+	}
+
+	tests := []struct {
+		name  string
+		c     *ClipdController
+		args  args
+		wants wants
+	}{
+		{
+			name: "It yanks to the default register",
+			c:    controller,
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodPost, "/clipd", bytes.NewBuffer([]byte("test content"))),
+				p: []httprouter.Param{{}},
+			},
+			wants: wants{
+				statusCode: 200,
+				readCache:  true,
+				register:   DefaultRegister,
+				content:    []byte("test content"),
+			},
+		},
+		{
+			name: "It yanks to a named register",
+			c:    controller,
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodPost, "/clipd/abc", bytes.NewBuffer([]byte("test content"))),
+				p: []httprouter.Param{{
+					Key:   "reg",
+					Value: "abc",
+				}},
+			},
+			wants: wants{
+				statusCode: 200,
+				readCache:  true,
+				register:   "abc",
+				content:    []byte("test content"),
+			},
+		},
+		{
+			name: "It returns 500 if reading the buffer errors out",
+			c:    controller,
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodPost, "/clipd", badReader(0)),
+				p: []httprouter.Param{{}},
+			},
+			wants: wants{
+				statusCode: 500,
+			},
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer func() {
-				defer outBuf.Reset()
-				defer controller.cache.Flush()
+				testOutBuf.Reset()
+				cc.Flush()
 			}()
 
-			if tt.insertInMemory {
-				if tt.expectedReg == "" {
-					tt.expectedReg = DefaultRegister
+			tt.c.Yank(tt.args.w, tt.args.r, tt.args.p)
+
+			if tt.args.w.Code != tt.wants.statusCode {
+				t.Errorf("Expected status %d, got %d", tt.wants.statusCode, tt.args.w.Code)
+			}
+
+			if tt.wants.readCache {
+				if v, ok := cc.Get(tt.wants.register); !ok {
+					t.Errorf("Expected content in register %q", tt.wants.register)
+				} else {
+					vByte := v.([]byte)
+
+					if eq := bytes.Compare(vByte, tt.wants.content); eq != 0 {
+						t.Errorf("Expected default register to contain %q, got %q", string(tt.wants.content), string(vByte))
+					}
 				}
+			}
+		})
+	}
+}
 
-				controller.cache.Set(tt.expectedReg, tt.expectedContent, 0)
+func TestClipdController_Paste(t *testing.T) {
+	testOutBuf := new(bytes.Buffer)
+	lr := zerolog.New(testOutBuf)
+	cc := cache.New(1*time.Minute, 10*time.Minute)
+	controller := NewClipdController(&lr, cc)
+
+	type args struct {
+		w *httptest.ResponseRecorder
+		r *http.Request
+		p httprouter.Params
+	}
+
+	type wants struct {
+		statusCode int
+		writeCache bool
+		register   string
+		content    []byte
+	}
+
+	tests := []struct {
+		name  string
+		c     *ClipdController
+		args  args
+		wants wants
+	}{
+		{
+			name: "It pastes from the default register",
+			c:    controller,
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodGet, "/clipd", nil),
+				p: []httprouter.Param{{}},
+			},
+			wants: wants{
+				statusCode: 200,
+				writeCache: true,
+				register:   DefaultRegister,
+				content:    []byte("test content"),
+			},
+		},
+		{
+			name: "It pastes from a named register",
+			c:    controller,
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodGet, "/clipd/abc", nil),
+				p: []httprouter.Param{{
+					Key:   "reg",
+					Value: "abc",
+				}},
+			},
+			wants: wants{
+				statusCode: 200,
+				writeCache: true,
+				register:   "abc",
+				content:    []byte("test content"),
+			},
+		},
+		{
+			name: "It pastes from a named register",
+			c:    controller,
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodGet, "/clipd/abc", nil),
+				p: []httprouter.Param{{
+					Key:   "reg",
+					Value: "abc",
+				}},
+			},
+			wants: wants{
+				statusCode: 404,
+				register:   "abc",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				testOutBuf.Reset()
+				cc.Flush()
+			}()
+
+			if tt.wants.writeCache {
+				cc.Set(tt.wants.register, tt.wants.content, 0)
 			}
 
-			w := httptest.NewRecorder()
-			r := httptest.NewRequest("GET", fmt.Sprintf("/clipd/%s", tt.expectedReg), nil)
-			p := []httprouter.Param{{Key: "reg", Value: tt.expectedReg}}
+			tt.c.Paste(tt.args.w, tt.args.r, tt.args.p)
 
-			controller.Paste(w, r, p)
-			if w.Code != tt.expectedStatus {
-				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			if tt.args.w.Code != tt.wants.statusCode {
+				t.Errorf("Expected status %d, got %d", tt.wants.statusCode, tt.args.w.Code)
 			}
 
-			var clip Clip
-			body, _ := ioutil.ReadAll(w.Body)
-			_ = json.Unmarshal(body, &clip)
-
-			t.Logf("register %q, content %q", clip.Reg, clip.Content)
-			t.Logf("expected register %q, content %q", tt.expectedReg, tt.expectedContent)
-
-			if clip.Reg != tt.expectedReg || clip.Content != tt.expectedContent {
-				t.Fatalf("expected to find content %q in register %q, got %q", tt.expectedContent, tt.expectedReg, clip.Content)
+			if eq := bytes.Compare(tt.args.w.Body.Bytes(), tt.wants.content); eq != 0 {
+				t.Errorf("Expected response body to be %q, got %q", string(tt.wants.content), tt.args.w.Body.String())
 			}
 		})
 	}

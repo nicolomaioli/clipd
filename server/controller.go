@@ -25,10 +25,7 @@ func NewClipdController(l *zerolog.Logger, c *cache.Cache) *ClipdController {
 
 // Yank POST /clipd
 func (c *ClipdController) Yank(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	reg := p.ByName("reg")
-	if reg == "" {
-		reg = DefaultRegister
-	}
+	defer r.Body.Close()
 
 	content, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -37,12 +34,19 @@ func (c *ClipdController) Yank(w http.ResponseWriter, r *http.Request, p httprou
 		return
 	}
 
+	reg := p.ByName("reg")
+	if reg == "" {
+		reg = DefaultRegister
+	}
+
 	c.cache.Set(reg, content, 0)
 	w.WriteHeader(http.StatusOK)
 }
 
 // Paste GET /clipd
 func (c *ClipdController) Paste(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	defer r.Body.Close()
+
 	reg := p.ByName("reg")
 	if reg == "" {
 		reg = DefaultRegister
