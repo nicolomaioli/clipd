@@ -17,9 +17,8 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 		path   string
 	}
 
-	// An inspectable bytes.Buffer Logger can write to
-	outBuf := new(bytes.Buffer)
-	lr := zerolog.New(outBuf)
+	testOutBuf := new(bytes.Buffer)
+	lr := zerolog.New(testOutBuf)
 
 	tests := []struct {
 		name string
@@ -45,7 +44,7 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer outBuf.Reset()
+			defer testOutBuf.Reset()
 
 			spy := testutils.SpyHandler{Status: tt.args.status}
 			rl := RequestLogger{
@@ -59,9 +58,9 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 			rl.ServeHTTP(w, r)
 
 			tle := LogEntry{}
-			err := json.Unmarshal(outBuf.Bytes(), &tle)
+			err := json.Unmarshal(testOutBuf.Bytes(), &tle)
 			if err != nil {
-				t.Fatalf("could not unmarshal %q: %s", outBuf.String(), err)
+				t.Fatalf("could not unmarshal %q: %s", testOutBuf.String(), err)
 			}
 
 			if tt.args.status != tle.Status {
