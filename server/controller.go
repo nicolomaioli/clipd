@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
@@ -25,27 +24,20 @@ func NewClipdController(l *zerolog.Logger, c *cache.Cache) *ClipdController {
 }
 
 // Yank POST /clipd
-func (c *ClipdController) Yank(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	body, err := ioutil.ReadAll(r.Body)
+func (c *ClipdController) Yank(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	reg := p.ByName("reg")
+	if reg == "" {
+		reg = DefaultRegister
+	}
+
+	content, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		c.logger.Error().Msgf("error reading body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	yr := &Clip{}
-	err = json.Unmarshal(body, yr)
-	if err != nil {
-		c.logger.Error().Msgf("invalid json: %s", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if yr.Reg == "" {
-		yr.Reg = DefaultRegister
-	}
-
-	c.cache.Set(yr.Reg, yr.Content, 0)
+	c.cache.Set(reg, content, 0)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -56,31 +48,17 @@ func (c *ClipdController) Paste(w http.ResponseWriter, r *http.Request, p httpro
 		reg = DefaultRegister
 	}
 
-	var content string
+	var content []byte
 
 	if v, ok := c.cache.Get(reg); ok {
-		content = v.(string)
-	}
-
-	if content == "" {
-		c.logger.Debug().Msgf("clip not found with reg %q", reg)
+		content = v.([]byte)
+	} else {
+		c.logger.Debug().Msgf("clip not found in reg %q", reg)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	yr := &Clip{
-		Reg:     reg,
-		Content: content,
-	}
-
-	b, err := json.Marshal(yr)
-	if err != nil {
-		c.logger.Error().Msgf("error marshaling request %v: %s", yr, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Add("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	w.Write(b)
+	w.Write(content)
 }
