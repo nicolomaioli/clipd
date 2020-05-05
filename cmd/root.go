@@ -21,8 +21,7 @@ var rootCmd = &cobra.Command{
 // Execute is the main entry point of cmd
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }
 
