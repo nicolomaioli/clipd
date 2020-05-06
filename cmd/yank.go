@@ -1,16 +1,17 @@
 package cmd
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var reg string
+var yankReg string
 
 func init() {
 	rootCmd.AddCommand(yankCmd)
@@ -18,7 +19,7 @@ func init() {
 	// Address
 	yankCmd.Flags().StringP("address", "a", ":8080", "address of the clipd server")
 	viper.BindPFlag("client.address", yankCmd.Flags().Lookup("address"))
-	yankCmd.Flags().StringVarP(&reg, "register", "r", "", "named register")
+	yankCmd.Flags().StringVarP(&yankReg, "register", "r", "", "named register")
 }
 
 var yankCmd = &cobra.Command{
@@ -26,18 +27,30 @@ var yankCmd = &cobra.Command{
 	Short: "Yank content to a register",
 	Long: `
 Yank content to a register. If a named register is not provided, the default
-register ("default") is used.
+register ("default") is used. It is intended to work with pipes and i/o
+redirection.
 	`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		content := args[0]
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-		body := bytes.NewBuffer([]byte(content))
+		if (info.Mode() & os.ModeCharDevice) == os.ModeCharDevice {
+			log.Fatal("yank is intended to work with pipes")
+		}
+
+		if info.Size() == 0 {
+			os.Exit(0)
+		}
+
+		body := bufio.NewReader(os.Stdin)
 		clipdAddr := viper.GetString("client.address")
 		url := fmt.Sprintf("http://%s/clipd", clipdAddr)
 
-		if reg != "" {
-			url += fmt.Sprintf("/%s", reg)
+		if yankReg != "" {
+			url += fmt.Sprintf("/%s", yankReg)
 		}
 
 		res, err := http.Post(

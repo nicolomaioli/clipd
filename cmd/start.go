@@ -33,6 +33,7 @@ var startCmd = &cobra.Command{
 	Long: `
 Start the clipd server. Logs are printed to Stdout and can be redirected.
 	`,
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		config := &server.Config{
 			Addr:     viper.GetString("server.address"),

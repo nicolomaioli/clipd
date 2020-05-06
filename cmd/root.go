@@ -16,6 +16,7 @@ var rootCmd = &cobra.Command{
 	Use:   "clipd",
 	Short: "A simple clipboard with support for multiple registries ",
 	Long:  `TODO`, // TODO: Add longer explanation
+	Args:  cobra.NoArgs,
 }
 
 // Execute is the main entry point of cmd
