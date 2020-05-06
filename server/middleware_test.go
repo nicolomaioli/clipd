@@ -3,12 +3,21 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nicolomaioli/clipd/server/internal/testutils"
 	"github.com/rs/zerolog"
 )
+
+type SpyHandler struct {
+	Status int
+}
+
+func (h SpyHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(h.Status)
+	w.Write([]byte("called"))
+}
 
 func TestRequestLogger_ServeHTTP(t *testing.T) {
 	type args struct {
@@ -46,7 +55,7 @@ func TestRequestLogger_ServeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer testOutBuf.Reset()
 
-			spy := testutils.SpyHandler{Status: tt.args.status}
+			spy := SpyHandler{Status: tt.args.status}
 			rl := RequestLogger{
 				Next:   spy,
 				Logger: &lr,

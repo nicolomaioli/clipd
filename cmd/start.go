@@ -18,34 +18,22 @@ import (
 func init() {
 	rootCmd.AddCommand(startCmd)
 
-	// ### Flags
-
-	// Address
 	startCmd.Flags().StringP("address", "a", ":8080", "address of the clipd server")
-	viper.BindPFlag("server.address", startCmd.Flags().Lookup("address"))
-
-	// Develop
 	startCmd.Flags().BoolP("develop", "d", false, "set developer mode")
-	viper.BindPFlag("server.develop", startCmd.Flags().Lookup("develop"))
+	startCmd.Flags().IntP("logLevel", "l", 3, `set log level (0-7)`)
 
-	// LogLevel
-	startCmd.Flags().IntP("logLevel", "l", 3, `set log level:
-	- Debug: 0
-	- Info: 1
-	- Warn: 2
-	- Error: 3
-	- Fatal: 4
-	- Panic: 5
-	- No: 6
-	- Disabled: 7
-	`)
+	viper.BindPFlag("server.address", startCmd.Flags().Lookup("address"))
+	viper.BindPFlag("server.develop", startCmd.Flags().Lookup("develop"))
 	viper.BindPFlag("server.logLevel", startCmd.Flags().Lookup("logLevel"))
 }
 
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the clipd server",
-	Long:  `Start the clipd server`,
+	Long: `
+Start the clipd server. Logs are printed to Stdout and can be redirected.
+	`,
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		config := &server.Config{
 			Addr:     viper.GetString("server.address"),
