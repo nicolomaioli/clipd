@@ -16,7 +16,7 @@ func init() {
 	rootCmd.AddCommand(pasteCmd)
 
 	// Address
-	pasteCmd.Flags().StringP("address", "a", ":8080", "address of the clipd server")
+	pasteCmd.Flags().StringP("address", "a", ":8891", "address of the clipd server")
 	viper.BindPFlag("client.address", pasteCmd.Flags().Lookup("address"))
 	pasteCmd.Flags().StringVarP(&pasteReg, "register", "r", "", "named register")
 }

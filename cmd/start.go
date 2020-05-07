@@ -17,7 +17,7 @@ import (
 func init() {
 	rootCmd.AddCommand(startCmd)
 
-	startCmd.Flags().StringP("address", "a", ":8080", "address of the clipd server")
+	startCmd.Flags().StringP("address", "a", ":8891", "address of the clipd server")
 	startCmd.Flags().BoolP("develop", "d", false, "logs are pretty printed in developer mode")
 	startCmd.Flags().IntP("logLevel", "l", 3, `set log level (0 Info - 7 Disabled)`)
 

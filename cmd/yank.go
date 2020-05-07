@@ -16,7 +16,7 @@ func init() {
 	rootCmd.AddCommand(yankCmd)
 
 	// Address
-	yankCmd.Flags().StringP("address", "a", ":8080", "address of the clipd server")
+	yankCmd.Flags().StringP("address", "a", ":8891", "address of the clipd server")
 	viper.BindPFlag("client.address", yankCmd.Flags().Lookup("address"))
 	yankCmd.Flags().StringVarP(&yankReg, "register", "r", "", "named register")
 }
