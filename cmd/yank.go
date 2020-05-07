@@ -40,10 +40,6 @@ redirection.
 			logger.Fatal("yank is intended to work with pipes")
 		}
 
-		if info.Size() == 0 {
-			os.Exit(0)
-		}
-
 		body := bufio.NewReader(os.Stdin)
 		clipdAddr := viper.GetString("client.address")
 		url := fmt.Sprintf("http://%s/clipd", clipdAddr)
