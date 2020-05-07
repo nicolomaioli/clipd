@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -34,11 +33,11 @@ redirection.
 	Run: func(cmd *cobra.Command, args []string) {
 		info, err := os.Stdin.Stat()
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		if (info.Mode() & os.ModeCharDevice) == os.ModeCharDevice {
-			log.Fatal("yank is intended to work with pipes")
+			logger.Fatal("yank is intended to work with pipes")
 		}
 
 		if info.Size() == 0 {
@@ -64,11 +63,11 @@ redirection.
 		}
 
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		if res.StatusCode != http.StatusOK {
-			log.Fatalf("http error %d", res.StatusCode)
+			logger.Fatalf("http error %d", res.StatusCode)
 		}
 	},
 }
