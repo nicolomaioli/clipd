@@ -81,7 +81,7 @@ func NewClipdServer(config *Config) *ClipdServer {
 
 // CleanAfterShutdown can be called after http.Server.Shutdown
 func (c *ClipdServer) CleanAfterShutdown() {
-	c.Logger.Info().Msg("ClipdServer clean")
+	c.Logger.Info().Msg("server clean-up initiated")
 	c.Cache.Flush()
 	c.Logger.Info().Msg("server shutdown complete")
 }
