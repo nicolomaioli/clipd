@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 
@@ -42,21 +41,21 @@ register ("default") is used.
 			url,
 		)
 
+		if err != nil {
+			logger.Fatal(err)
+		}
+
 		if res != nil {
 			defer res.Body.Close()
 		}
 
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		if res.StatusCode != http.StatusOK {
-			log.Fatalf("http error %d", res.StatusCode)
+			logger.Printf("http error %d", res.StatusCode)
 		}
 
 		content, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		fmt.Fprint(os.Stdout, string(content))

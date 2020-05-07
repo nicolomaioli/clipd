@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,8 +18,8 @@ func init() {
 	rootCmd.AddCommand(startCmd)
 
 	startCmd.Flags().StringP("address", "a", ":8080", "address of the clipd server")
-	startCmd.Flags().BoolP("develop", "d", false, "set developer mode")
-	startCmd.Flags().IntP("logLevel", "l", 3, `set log level (0-7)`)
+	startCmd.Flags().BoolP("develop", "d", false, "logs are pretty printed in developer mode")
+	startCmd.Flags().IntP("logLevel", "l", 3, `set log level (0 Info - 7 Disabled)`)
 
 	viper.BindPFlag("server.address", startCmd.Flags().Lookup("address"))
 	viper.BindPFlag("server.develop", startCmd.Flags().Lookup("develop"))
@@ -51,7 +50,8 @@ Start the clipd server. Logs are printed to Stdout and can be redirected.
 		go func() {
 			err := s.ListenAndServe()
 			if err != nil && err != http.ErrServerClosed {
-				log.Fatalf("ListenAndServe error: %s", err)
+				s.Logger.Fatal().Err(err).Send()
+				os.Exit(1) // Fatal will not call os.Exit(1) if logs are disabled
 			}
 		}()
 
@@ -64,8 +64,10 @@ Start the clipd server. Logs are printed to Stdout and can be redirected.
 		}()
 
 		if err := s.Server.Shutdown(ctx); err != nil {
-			log.Fatalf("Server Shutdown Failed:%+v", err)
+			s.Logger.Fatal().Err(err).Send()
+			os.Exit(1)
 		}
-		log.Print("Server Exited Properly")
+
+		s.Logger.Info().Msg("server exited properly")
 	},
 }
